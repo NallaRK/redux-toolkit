@@ -1,6 +1,14 @@
 import { useReducer, useCallback, useRef, useEffect } from "react";
 import { useDispatch } from "react-redux";
 
+const ActionTypes = {
+  START_POLLING: "START_POLLING",
+  STOP_POLLING: "STOP_POLLING",
+  POLL_INIT: "POLL_INIT",
+  POLL_RESULT: "POLL_RESULT",
+  VALIDATION_SUCCESS: "VALIDATION_SUCCESS",
+  MAX_ATTEMPTS_REACHED: "MAX_ATTEMPTS_REACHED",
+};
 const initialState = {
   isPollingJobActive: false,
   isPolling: false,
@@ -11,33 +19,33 @@ const initialState = {
 
 function pollingReducer(state, action) {
   switch (action.type) {
-    case "START_POLLING":
+    case ActionTypes.START_POLLING:
       return {
         ...initialState,
         isPollingJobActive: true,
       };
-    case "STOP_POLLING":
+    case ActionTypes.STOP_POLLING:
       return {
         ...state,
         isPollingJobActive: false,
         isPolling: false,
       };
-    case "POLL_INIT":
+    case ActionTypes.POLL_INIT:
       return { ...state, isPolling: true };
-    case "POLL_RESULT":
+    case ActionTypes.POLL_RESULT:
       return {
         ...state,
         isPolling: false,
         lastResult: action.payload,
         attemptCount: state.attemptCount + 1,
       };
-    case "VALIDATION_SUCCESS":
+    case ActionTypes.VALIDATION_SUCCESS:
       return {
         ...state,
         isPollingJobActive: false,
         validationStatus: "success",
       };
-    case "MAX_ATTEMPTS_REACHED":
+    case ActionTypes.MAX_ATTEMPTS_REACHED:
       return {
         ...state,
         isPollingJobActive: false,
@@ -48,19 +56,10 @@ function pollingReducer(state, action) {
   }
 }
 
-/**
- * Generic polling hook for Redux thunk actions
- * @param {Function} thunkAction - The thunk action to dispatch
- * @param {number} maxAttempts - Maximum number of polling attempts
- * @param {number} interval - Interval between polls in milliseconds
- * @param {Function} validator - Function that validates the thunk response (receives full payload)
- * @returns {Object} Polling state and control functions
- */
 const useThunkPoll = (thunkAction, maxAttempts, interval, validator) => {
   const dispatch = useDispatch();
   const [state, dispatchAction] = useReducer(pollingReducer, initialState);
 
-  // Use refs to hold values that can change over time but shouldn't trigger re-renders
   const thunkActionRef = useRef(thunkAction);
   const validatorRef = useRef(validator);
   const intervalRef = useRef(interval);
@@ -68,12 +67,10 @@ const useThunkPoll = (thunkAction, maxAttempts, interval, validator) => {
   const timeoutRef = useRef(null);
   const stateRef = useRef(state);
 
-  // Keep stateRef updated with the latest state
   useEffect(() => {
     stateRef.current = state;
   }, [state]);
 
-  // Keep other refs updated with the latest values from props
   useEffect(() => {
     thunkActionRef.current = thunkAction;
     validatorRef.current = validator;
@@ -85,66 +82,54 @@ const useThunkPoll = (thunkAction, maxAttempts, interval, validator) => {
     const currentState = stateRef.current;
     if (!currentState.isPollingJobActive) return;
 
-    dispatchAction({ type: "POLL_INIT" });
-
-    dispatch(thunkActionRef.current())
-      .then((result) => {
-        dispatchAction({ type: "POLL_RESULT", payload: result });
-        const nextState = {
-          ...stateRef.current,
-          attemptCount: stateRef.current.attemptCount + 1,
-        };
-
-        const isValid = validatorRef.current(result.payload);
-        if (isValid) {
-          dispatchAction({ type: "VALIDATION_SUCCESS" });
-          return;
-        }
-
-        if (nextState.attemptCount >= maxAttemptsRef.current) {
-          dispatchAction({ type: "MAX_ATTEMPTS_REACHED" });
-          return;
-        }
-
+    const handleNextPoll = () => {
+      if (
+        maxAttemptsRef.current != null &&
+        stateRef.current.attemptCount + 1 >= maxAttemptsRef.current
+      ) {
+        dispatchAction({ type: ActionTypes.MAX_ATTEMPTS_REACHED });
+      } else {
         timeoutRef.current = setTimeout(performPoll, intervalRef.current);
+      }
+    };
+
+    dispatchAction({ type: ActionTypes.POLL_INIT });
+
+    dispatch(thunkActionRef.current)
+      .then((result) => {
+        dispatchAction({ type: ActionTypes.POLL_RESULT, payload: result });
+        if (validatorRef?.current(result.payload)) {
+          dispatchAction({ type: ActionTypes.VALIDATION_SUCCESS });
+        } else {
+          handleNextPoll();
+        }
       })
       .catch((error) => {
-        console.error("Error during polling:", error);
-        dispatchAction({ type: "POLL_RESULT", payload: { error } });
-        const nextState = {
-          ...stateRef.current,
-          attemptCount: stateRef.current.attemptCount + 1,
-        };
-
-        if (nextState.attemptCount >= maxAttemptsRef.current) {
-          dispatchAction({ type: "MAX_ATTEMPTS_REACHED" });
-          return;
-        }
-
-        timeoutRef.current = setTimeout(performPoll, intervalRef.current);
+        dispatchAction({ type: ActionTypes.POLL_RESULT, payload: { error } });
+        handleNextPoll();
       });
   }, [dispatch]);
 
-  const startPolling = useCallback(() => {
-    dispatchAction({ type: "START_POLLING" });
-    // Use a timeout to ensure the state update from START_POLLING is applied before the first poll
-    setTimeout(performPoll, 0);
-  }, [performPoll]);
-
-  const stopPolling = useCallback(() => {
-    if (timeoutRef.current) {
-      clearTimeout(timeoutRef.current);
-    }
-    dispatchAction({ type: "STOP_POLLING" });
-  }, []);
-
-  // Cleanup timeout on unmount
   useEffect(() => {
+    if (state.isPollingJobActive) {
+      performPoll();
+    }
     return () => {
       if (timeoutRef.current) {
         clearTimeout(timeoutRef.current);
       }
     };
+  }, [state.isPollingJobActive, performPoll]);
+
+  const startPolling = useCallback(() => {
+    dispatchAction({ type: ActionTypes.START_POLLING });
+  }, []);
+
+  const stopPolling = useCallback(() => {
+    if (timeoutRef.current) {
+      clearTimeout(timeoutRef.current);
+    }
+    dispatchAction({ type: ActionTypes.STOP_POLLING });
   }, []);
 
   return {

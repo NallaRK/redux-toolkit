@@ -15,8 +15,7 @@ const Posts = () => {
     isPolling,
     attemptCount,
     validationStatus,
-    postsCount,
-  } = usePostThunkPoll(10, 3000); // 5 attempts, 3-second interval
+  } = usePostThunkPoll(); // 5 attempts, 3-second interval
 
   // Start polling on component mount and stop on unmount
   useEffect(() => {
@@ -41,12 +40,7 @@ const Posts = () => {
       <h2>
         Posts {isPollingJobActive ? "Polling JOB Active" : "Polling JOB Done"}
       </h2>
-      <h3>{isPolling ? "Polling In Progress" : "Polling Done"}</h3>
-      {isPollingJobActive && (
-        <div style={{ marginBottom: "1rem", color: "blue" }}>
-          Polling... (Attempt: {attemptCount})
-        </div>
-      )}
+      <h3>Polling count {attemptCount}</h3>
       {validationStatus && (
         <div
           style={{
@@ -58,7 +52,7 @@ const Posts = () => {
         </div>
       )}
       <div>
-        <strong>Total Posts: {postsCount}</strong>
+        <strong>Post Details</strong>
       </div>
       <ul>
         {posts.length === 0 ? (

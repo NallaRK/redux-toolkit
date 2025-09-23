@@ -35,10 +35,10 @@ describe("Posts Component", () => {
       </Provider>
     );
     expect(screen.getByText("Posts Polling JOB Done")).toBeInTheDocument();
-    expect(screen.getByText("Polling Done")).toBeInTheDocument();
+    expect(screen.getByText("Polling count 0")).toBeInTheDocument();
     expect(screen.getByText("Test Post")).toBeInTheDocument();
     expect(screen.getByText("Another Post")).toBeInTheDocument();
-    expect(screen.getByText("Total Posts: 0")).toBeInTheDocument();
+    expect(screen.getByText("Polling count 0")).toBeInTheDocument();
   });
 
   it("shows loading when status is loading and no posts", () => {

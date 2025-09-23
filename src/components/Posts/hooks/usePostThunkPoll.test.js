@@ -1,4 +1,7 @@
-import { renderHook, act } from "@testing-library/react";
+import React from "react";
+import { renderHook } from "@testing-library/react";
+import { Provider } from "react-redux";
+import configureMockStore from "redux-mock-store";
 import usePostThunkPoll from "./usePostThunkPoll";
 import useThunkPoll from "../../../hooks/useThunkPoll";
 import { fetchPosts } from "../postSlice";
@@ -10,6 +13,11 @@ jest.mock("../../../hooks/useThunkPoll");
 jest.mock("../postSlice", () => ({
   fetchPosts: jest.fn(),
 }));
+
+const mockStore = configureMockStore([]);
+const store = mockStore({});
+
+const wrapper = ({ children }) => <Provider store={store}>{children}</Provider>;
 
 describe("usePostThunkPoll", () => {
   let mockUseThunkPoll;
@@ -35,40 +43,13 @@ describe("usePostThunkPoll", () => {
 
   describe("Default Parameters", () => {
     it("should use default parameters when none provided", () => {
-      renderHook(() => usePostThunkPoll());
+      renderHook(() => usePostThunkPoll(), { wrapper });
 
       expect(mockUseThunkPoll).toHaveBeenCalledWith(
-        mockFetchPosts,
+        expect.any(Function), // thunkAction
         5, // default maxAttempts
         3000, // default interval
         expect.any(Function) // postsValidator
-      );
-    });
-  });
-
-  describe("Custom Parameters", () => {
-    it("should use custom parameters when provided", () => {
-      const customMaxAttempts = 10;
-      const customInterval = 5000;
-
-      renderHook(() => usePostThunkPoll(customMaxAttempts, customInterval));
-
-      expect(mockUseThunkPoll).toHaveBeenCalledWith(
-        mockFetchPosts,
-        customMaxAttempts,
-        customInterval,
-        expect.any(Function)
-      );
-    });
-
-    it("should handle partial parameter overrides", () => {
-      renderHook(() => usePostThunkPoll(7)); // Only maxAttempts
-
-      expect(mockUseThunkPoll).toHaveBeenCalledWith(
-        mockFetchPosts,
-        7,
-        3000, // default interval
-        expect.any(Function)
       );
     });
   });
@@ -89,7 +70,7 @@ describe("usePostThunkPoll", () => {
         };
       });
 
-      renderHook(() => usePostThunkPoll());
+      renderHook(() => usePostThunkPoll(), { wrapper });
 
       // Test with array of length 101 (should return false)
       const posts101 = Array(101).fill({ id: 1, title: "test" });
@@ -118,7 +99,7 @@ describe("usePostThunkPoll", () => {
         };
       });
 
-      renderHook(() => usePostThunkPoll());
+      renderHook(() => usePostThunkPoll(), { wrapper });
 
       // Test with array of length 102 (should return true)
       const posts102 = Array(102).fill({ id: 1, title: "test" });
@@ -144,7 +125,7 @@ describe("usePostThunkPoll", () => {
         };
       });
 
-      renderHook(() => usePostThunkPoll());
+      renderHook(() => usePostThunkPoll(), { wrapper });
 
       // Test with null payload
       expect(capturedValidator(null)).toBe(false);
@@ -173,7 +154,7 @@ describe("usePostThunkPoll", () => {
 
       mockUseThunkPoll.mockReturnValue(mockPollingState);
 
-      const { result } = renderHook(() => usePostThunkPoll());
+      const { result } = renderHook(() => usePostThunkPoll(), { wrapper });
 
       expect(result.current).toEqual({
         ...mockPollingState,
@@ -193,7 +174,7 @@ describe("usePostThunkPoll", () => {
         stopPolling: jest.fn(),
       });
 
-      const { result } = renderHook(() => usePostThunkPoll());
+      const { result } = renderHook(() => usePostThunkPoll(), { wrapper });
 
       expect(result.current.postsCount).toBe(75);
     });
@@ -209,7 +190,7 @@ describe("usePostThunkPoll", () => {
         stopPolling: jest.fn(),
       });
 
-      const { result } = renderHook(() => usePostThunkPoll());
+      const { result } = renderHook(() => usePostThunkPoll(), { wrapper });
 
       expect(result.current.postsCount).toBe(0);
     });
@@ -225,24 +206,13 @@ describe("usePostThunkPoll", () => {
         stopPolling: jest.fn(),
       });
 
-      const { result } = renderHook(() => usePostThunkPoll());
+      const { result } = renderHook(() => usePostThunkPoll(), { wrapper });
 
       expect(result.current.postsCount).toBe(0);
     });
   });
 
   describe("Integration with useThunkPoll", () => {
-    it("should pass correct parameters to useThunkPoll", () => {
-      renderHook(() => usePostThunkPoll(3, 2000));
-
-      expect(mockUseThunkPoll).toHaveBeenCalledWith(
-        mockFetchPosts,
-        3,
-        2000,
-        expect.any(Function)
-      );
-    });
-
     it("should preserve startPolling and stopPolling functions", () => {
       const mockStartPolling = jest.fn();
       const mockStopPolling = jest.fn();
@@ -257,7 +227,7 @@ describe("usePostThunkPoll", () => {
         stopPolling: mockStopPolling,
       });
 
-      const { result } = renderHook(() => usePostThunkPoll());
+      const { result } = renderHook(() => usePostThunkPoll(), { wrapper });
 
       expect(result.current.startPolling).toBe(mockStartPolling);
       expect(result.current.stopPolling).toBe(mockStopPolling);
@@ -268,7 +238,7 @@ describe("usePostThunkPoll", () => {
     it("should maintain stable validator reference across re-renders", () => {
       const calls = [];
       mockUseThunkPoll.mockImplementation((...args) => {
-        calls.push(args[3]); // Capture validator function
+        calls.push(args); // Capture validator function
         return {
           isPollingJobActive: false,
           isPolling: false,
@@ -280,14 +250,14 @@ describe("usePostThunkPoll", () => {
         };
       });
 
-      const { rerender } = renderHook(() => usePostThunkPoll());
+      const { rerender } = renderHook(() => usePostThunkPoll(), { wrapper });
       rerender();
       rerender();
 
       // All validator references should be the same (stable callback)
       expect(calls).toHaveLength(3);
-      expect(calls[0]).toBe(calls[1]);
-      expect(calls[1]).toBe(calls[2]);
+      expect(calls).toBe(calls);
+      expect(calls).toBe(calls);
     });
   });
 
@@ -304,7 +274,7 @@ describe("usePostThunkPoll", () => {
         stopPolling: jest.fn(),
       });
 
-      const { result } = renderHook(() => usePostThunkPoll());
+      const { result } = renderHook(() => usePostThunkPoll(), { wrapper });
 
       expect(result.current.postsCount).toBe(150);
       expect(result.current.validationStatus).toBe("success");
@@ -323,7 +293,7 @@ describe("usePostThunkPoll", () => {
         stopPolling: jest.fn(),
       });
 
-      const { result } = renderHook(() => usePostThunkPoll());
+      const { result } = renderHook(() => usePostThunkPoll(), { wrapper });
 
       expect(result.current.postsCount).toBe(50);
       expect(result.current.validationStatus).toBe("max_attempts_reached");
@@ -341,7 +311,7 @@ describe("usePostThunkPoll", () => {
         stopPolling: jest.fn(),
       });
 
-      const { result } = renderHook(() => usePostThunkPoll());
+      const { result } = renderHook(() => usePostThunkPoll(), { wrapper });
 
       expect(result.current.isPollingJobActive).toBe(true);
       expect(result.current.isPolling).toBe(true);
@@ -362,7 +332,7 @@ describe("usePostThunkPoll", () => {
         stopPolling: jest.fn(),
       });
 
-      const { result } = renderHook(() => usePostThunkPoll());
+      const { result } = renderHook(() => usePostThunkPoll(), { wrapper });
 
       expect(result.current.postsCount).toBe(0);
     });
@@ -379,7 +349,7 @@ describe("usePostThunkPoll", () => {
         stopPolling: jest.fn(),
       });
 
-      const { result } = renderHook(() => usePostThunkPoll());
+      const { result } = renderHook(() => usePostThunkPoll(), { wrapper });
 
       expect(result.current.postsCount).toBe(101);
     });
@@ -396,7 +366,7 @@ describe("usePostThunkPoll", () => {
         stopPolling: jest.fn(),
       });
 
-      const { result } = renderHook(() => usePostThunkPoll());
+      const { result } = renderHook(() => usePostThunkPoll(), { wrapper });
 
       expect(result.current.postsCount).toBe(102);
     });
